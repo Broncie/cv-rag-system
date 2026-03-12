@@ -105,15 +105,12 @@ python ingest.py
 http://localhost:8000
 
 ## API Endpoints
-GET /
-Serves the local debug interface.
+GET /: Serves the local debug interface.
 
-GET /health
+GET /health: Returns API health status.
 
-Returns API health status.
+POST /ask: Accepts a JSON request with:
 
-POST /ask
-Accepts a JSON request with:
 ```json
 {
   "question": "Which candidates have experience with Python and data engineering?",
@@ -136,30 +133,20 @@ Returns:
 
 ## Notes
 - This project is intended for local use.
-
 - It uses local models through Ollama, meaning no cloud LLM API is required.
-
 - The current interface is a debug-oriented frontend for testing retrieval quality, groundedness, and citations.
 
 ## Data Privacy
-
 This project is designed to work with local CV documents.
 
 Do **not** commit real CVs or generated vector indexes to GitHub.  
 The `data/docs` and `data/index` folders are intended for local use only and should be excluded using `.gitignore`.
 
 ## Future Improvements
-
 - migrate frontend to React
-
 - improve answer verification logic
-
 - add stronger input validation and security hardening
-
 - support metadata filtering
-
 - add better prompt orchestration and agentic workflows
-
 - improve document management and ingestion pipeline
-
 - add authentication if deployed beyond localhost
