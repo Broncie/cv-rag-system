@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CV RAG — Debug Interface</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #141414;
+    --border:   #222;
+    --border2:  #2e2e2e;
+    --text:     #e2e2e2;
+    --muted:    #555;
+    --accent:   #00e5a0;
+    --accent2:  #0077ff;
+    --warn:     #f5a623;
+    --danger:   #ff4d4d;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 48px 1fr 72px;
+    grid-template-columns: 1fr 340px;
+    grid-template-areas:
+      "header header"
+      "chat   sidebar"
+      "input  input";
+    overflow: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    grid-area: header;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    background: var(--surface);
+  }
+  header .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  header .sep { color: var(--muted); }
+  header .subtitle {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-left: auto;
+    transition: background 0.3s;
+  }
+  .status-dot.online { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .status-dot.error  { background: var(--danger); }
+  .status-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── CHAT ── */
+  #chat {
+    grid-area: chat;
+    overflow-y: auto;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+
+  .msg { display: flex; flex-direction: column; gap: 6px; animation: fadeIn 0.2s ease; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+  .msg.user  { align-items: flex-end; }
+  .msg.assistant { align-items: flex-start; }
+
+  .bubble {
+    max-width: 72%;
+    padding: 10px 14px;
+    border-radius: 2px;
+    line-height: 1.6;
+    font-size: 13.5px;
+  }
+  .msg.user .bubble {
+    background: #1a1a1a;
+    border: 1px solid var(--border2);
+    color: #ccc;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .msg.assistant .bubble {
+    background: #111b16;
+    border: 1px solid #1a3329;
+    color: var(--text);
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 2px 7px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .badge.ground  { background: #0d2b1e; color: var(--accent); border: 1px solid #1a4d37; }
+  .badge.conf    { background: #0d1c2b; color: var(--accent2); border: 1px solid #1a3a57; }
+  .badge.attempt { background: #1f1a0d; color: var(--warn); border: 1px solid #3d3418; }
+  .badge.warn    { background: #2b0d0d; color: var(--danger); border: 1px solid #4d1a1a; }
+
+  .citations-toggle {
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+  .citations-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  .citations-panel {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 72%;
+    margin-top: 2px;
+  }
+  .citations-panel.open { display: flex; }
+
+  .citation-card {
+    background: #0f0f0f;
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent2);
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #888;
+    line-height: 1.5;
+  }
+  .citation-card .cid { color: var(--accent2); font-weight: 600; }
+  .citation-card .dist { color: var(--muted); }
+
+  .unsupported-panel {
+    max-width: 72%;
+    background: #1a0d0d;
+    border: 1px solid #3d1a1a;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #cc6666;
+    line-height: 1.5;
+  }
+  .unsupported-panel .label { color: var(--danger); font-weight: 600; margin-bottom: 4px; }
+
+  /* typing indicator */
+  .typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; }
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: bounce 1.1s infinite;
+    opacity: 0.6;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.18s; }
+  .typing span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    grid-area: sidebar;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+  .sidebar-section h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .config-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .config-row label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .config-row input {
+    background: #0d0d0d;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 2px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .config-row input:focus { border-color: var(--accent); }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-box {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    padding: 10px;
+    border-radius: 2px;
+  }
+  .stat-box .val {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-box .lbl {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .raw-json {
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #666;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 2px;
+    line-height: 1.5;
+  }
+  .raw-json .k { color: #5a8f7b; }
+  .raw-json .s { color: #a3c9a8; }
+  .raw-json .n { color: var(--accent2); }
+
+  .suggested-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sq-btn {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    color: #888;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 10px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 2px;
+    line-height: 1.4;
+    transition: all 0.15s;
+  }
+  .sq-btn:hover { border-color: var(--accent); color: var(--accent); background: #0d1a13; }
+
+  /* ── INPUT ── */
+  #input-bar {
+    grid-area: input;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    background: var(--surface);
+  }
+  #question-input {
+    flex: 1;
+    background: #0d0d0d;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #question-input:focus { border-color: var(--accent); }
+  #question-input::placeholder { color: var(--muted); }
+
+  #send-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 10px 18px;
+    cursor: pointer;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
+    transition: opacity 0.15s;
+  }
+  #send-btn:hover { opacity: 0.85; }
+  #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .k-input {
+    background: #0d0d0d;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 8px;
+    border-radius: 2px;
+    outline: none;
+    width: 52px;
+    text-align: center;
+  }
+  .k-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-align: center;
+  }
+  .empty-state .big { font-size: 32px; margin-bottom: 8px; opacity: 0.3; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">CV-RAG</span>
+  <span class="sep">/</span>
+  <span class="subtitle">debug interface · llama3.1 + nomic-embed-text + faiss</span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <span class="status-label" id="status-label">checking...</span>
+    <div class="status-dot" id="status-dot"></div>
+  </div>
+</header>
+
+<div id="chat">
+  <div class="empty-state" id="empty-state">
+    <div class="big">⬡</div>
+    <div>No queries yet.</div>
+    <div style="color:#333">Ask a question about the indexed CVs.</div>
+  </div>
+</div>
+
+<div id="sidebar">
+  <div class="sidebar-section">
+    <h3>Config</h3>
+    <div class="config-row">
+      <label>API BASE URL</label>
+      <input type="text" id="api-url" value="http://localhost:8000">
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Session Stats</h3>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="val" id="stat-queries">0</div><div class="lbl">Queries</div></div>
+      <div class="stat-box"><div class="val" id="stat-avg-ground">—</div><div class="lbl">Avg Ground.</div></div>
+      <div class="stat-box"><div class="val" id="stat-avg-attempts">—</div><div class="lbl">Avg Attempts</div></div>
+      <div class="stat-box"><div class="val" id="stat-refused">0</div><div class="lbl">Refused</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Last Response — Raw JSON</h3>
+    <div class="raw-json" id="raw-json">—</div>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Suggested Queries</h3>
+    <div class="suggested-questions">
+      <button class="sq-btn" onclick="useQuestion(this)">Which candidates have experience with Python and data engineering?</button>
+      <button class="sq-btn" onclick="useQuestion(this)">Who has worked with Kubernetes or Docker in production?</button>
+      <button class="sq-btn" onclick="useQuestion(this)">Summarise the most senior candidate's background.</button>
+      <button class="sq-btn" onclick="useQuestion(this)">Which candidates have a machine learning background?</button>
+      <button class="sq-btn" onclick="useQuestion(this)">Who has the most years of experience?</button>
+    </div>
+  </div>
+</div>
+
+<div id="input-bar">
+  <input type="text" id="question-input" placeholder="Ask something about the indexed CVs..." autocomplete="off">
+  <span class="k-label">k =</span>
+  <input type="number" class="k-input" id="k-input" value="5" min="1" max="20">
+  <button id="send-btn" onclick="sendQuestion()">SEND →</button>
+</div>
+
+<script>
+  // ── State ──
+  const sessionStats = { queries: 0, groundSum: 0, attemptsSum: 0, refused: 0 };
+
+  // ── Health check ──
+  async function checkHealth() {
+    const base = document.getElementById('api-url').value.trim();
+    const dot = document.getElementById('status-dot');
+    const lbl = document.getElementById('status-label');
+    try {
+      const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(3000) });
+      if (r.ok) {
+        dot.className = 'status-dot online';
+        lbl.textContent = 'API online';
+      } else { throw new Error(); }
+    } catch {
+      dot.className = 'status-dot error';
+      lbl.textContent = 'API unreachable';
+    }
+  }
+  checkHealth();
+  setInterval(checkHealth, 10000);
+
+  // ── Helpers ──
+  function useQuestion(btn) {
+    document.getElementById('question-input').value = btn.textContent.trim();
+    document.getElementById('question-input').focus();
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function colorJson(json) {
+    return json
+      .replace(/("[\w_]+")\s*:/g, '<span class="k">$1</span>:')
+      .replace(/:\s*(".*?")/g, ': <span class="s">$1</span>')
+      .replace(/:\s*(\d+\.?\d*)/g, ': <span class="n">$1</span>');
+  }
+
+  function groundColor(g) {
+    if (g >= 0.9) return 'var(--accent)';
+    if (g >= 0.7) return 'var(--warn)';
+    return 'var(--danger)';
+  }
+
+  function updateStats(data) {
+    sessionStats.queries++;
+    const isRefused = data.confidence <= 0.2;
+    if (isRefused) sessionStats.refused++;
+    sessionStats.groundSum += data.groundedness;
+    sessionStats.attemptsSum += data.attempts;
+
+    document.getElementById('stat-queries').textContent = sessionStats.queries;
+    document.getElementById('stat-refused').textContent = sessionStats.refused;
+    document.getElementById('stat-avg-ground').textContent =
+      (sessionStats.groundSum / sessionStats.queries).toFixed(2);
+    document.getElementById('stat-avg-attempts').textContent =
+      (sessionStats.attemptsSum / sessionStats.queries).toFixed(1);
+  }
+
+  // ── Render ──
+  function appendUserMsg(question) {
+    const chat = document.getElementById('chat');
+    document.getElementById('empty-state')?.remove();
+    const el = document.createElement('div');
+    el.className = 'msg user';
+    el.innerHTML = `<div class="bubble">${escHtml(question)}</div>`;
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+    return el;
+  }
+
+  function appendTyping() {
+    const chat = document.getElementById('chat');
+    const el = document.createElement('div');
+    el.className = 'msg assistant';
+    el.id = 'typing-indicator';
+    el.innerHTML = `<div class="bubble typing"><span></span><span></span><span></span></div>`;
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function removeTyping() {
+    document.getElementById('typing-indicator')?.remove();
+  }
+
+  function appendAssistantMsg(data) {
+    const chat = document.getElementById('chat');
+    const citId = `cit-${Date.now()}`;
+    const panelId = `panel-${Date.now()}`;
+    const unspId = `unsp-${Date.now()}`;
+
+    const isRefused = data.confidence <= 0.2 ||
+      data.answer.includes("I do not have enough information");
+
+    const hasCitations = data.citations && data.citations.length > 0;
+    const hasUnsupported = data.unsupported_sentences && data.unsupported_sentences.length > 0;
+
+    const citationsHtml = hasCitations ? data.citations.map(c => `
+      <div class="citation-card">
+        <span class="cid">[chunk_id=${c.chunk_id}]</span>
+        &nbsp;${escHtml(c.source_file || '—')}
+        &nbsp;p.${c.page ?? '?'}
+        <span class="dist">&nbsp;dist=${c.distance.toFixed(4)}</span>
+      </div>`).join('') : '';
+
+    const el = document.createElement('div');
+    el.className = 'msg assistant';
+    el.innerHTML = `
+      <div class="bubble">${escHtml(data.answer)}</div>
+      <div class="meta-row">
+        <span class="badge ground" style="color:${groundColor(data.groundedness)}">
+          ground=${data.groundedness.toFixed(3)}
+        </span>
+        <span class="badge conf">conf=${data.confidence.toFixed(3)}</span>
+        <span class="badge attempt">attempts=${data.attempts}</span>
+        ${isRefused ? '<span class="badge warn">REFUSED</span>' : ''}
+        ${hasCitations ? `<button class="citations-toggle" onclick="toggleCitations('${panelId}', this)">${data.citations.length} citations ↓</button>` : ''}
+        ${hasUnsupported ? `<button class="citations-toggle" onclick="toggleCitations('${unspId}', this)" style="color:var(--danger);border-color:#3d1a1a">${data.unsupported_sentences.length} unsupported ↓</button>` : ''}
+      </div>
+      ${hasCitations ? `<div class="citations-panel" id="${panelId}">${citationsHtml}</div>` : ''}
+      ${hasUnsupported ? `
+        <div class="citations-panel" id="${unspId}">
+          <div class="unsupported-panel">
+            <div class="label">UNSUPPORTED SENTENCES</div>
+            ${data.unsupported_sentences.map(s => `<div>· ${escHtml(s)}</div>`).join('')}
+          </div>
+        </div>` : ''}
+    `;
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function toggleCitations(id, btn) {
+    const panel = document.getElementById(id);
+    panel.classList.toggle('open');
+    const isOpen = panel.classList.contains('open');
+    btn.textContent = btn.textContent.replace(isOpen ? '↓' : '↑', isOpen ? '↑' : '↓');
+  }
+
+  function renderRawJson(data) {
+    const pretty = JSON.stringify(data, null, 2);
+    document.getElementById('raw-json').innerHTML = colorJson(escHtml(pretty));
+  }
+
+  // ── Send ──
+  async function sendQuestion() {
+    const input = document.getElementById('question-input');
+    const question = input.value.trim();
+    if (!question) return;
+
+    const k = parseInt(document.getElementById('k-input').value) || 5;
+    const base = document.getElementById('api-url').value.trim();
+    const btn = document.getElementById('send-btn');
+
+    btn.disabled = true;
+    input.value = '';
+
+    appendUserMsg(question);
+    appendTyping();
+
+    try {
+      const res = await fetch(`${base}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, k }),
+      });
+
+      removeTyping();
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      appendAssistantMsg(data);
+      renderRawJson(data);
+      updateStats(data);
+
+    } catch (err) {
+      removeTyping();
+      const chat = document.getElementById('chat');
+      const el = document.createElement('div');
+      el.className = 'msg assistant';
+      el.innerHTML = `
+        <div class="bubble" style="border-color:#3d1a1a;background:#1a0d0d;color:var(--danger)">
+          Error: ${escHtml(err.message)}
+        </div>`;
+      chat.appendChild(el);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    btn.disabled = false;
+    input.focus();
+  }
+
+  // enter key
+  document.getElementById('question-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) sendQuestion();
+  });
+</script>
+</body>
+</html>

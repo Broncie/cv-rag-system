@@ -1,0 +1,10 @@
+# requirements.txt - lists Python dependencies for the RAG API service
+fastapi
+uvicorn[standard]
+pydantic
+langchain-community
+langchain-core
+langchain-text-splitters
+faiss-cpu
+pypdf
+aiofiles
