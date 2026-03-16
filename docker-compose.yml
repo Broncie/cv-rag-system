@@ -4,8 +4,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     ports:
-      # - "11434:11434"
-      - "127.0.0.1:11434:11434"
+      - "11434:11434"
+      # - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     deploy:
@@ -22,8 +22,8 @@ services:
     depends_on:
       - ollama
     ports:
-      # - "8000:8000"
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
+      # - "127.0.0.1:8000:8000"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - EMBED_MODEL=nomic-embed-text

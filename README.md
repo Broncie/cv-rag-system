@@ -4,15 +4,15 @@ A fully local Retrieval-Augmented Generation (RAG) application for querying and 
 ## Introduction
 This repository contains a fully local RAG system designed for querying indexed CVs through a simple API and interactive debug interface for inspecting retrieval results, citations, groundedness scores, and raw model responses.
 
-PDF CVs are ingested locally, split into chunks, converted into embeddings using Ollama, and stored in a FAISS vector index. When a question is asked, the system retrieves the most relevant chunks and uses a local LLM to generate an answer grounded in the retrieved content.
+PDF CVs are ingested locally, split into chunks, converted into embeddings using Ollama, and stored in a FAISS vector index. When a question is asked, the system retrieves the most relevant chunks, groups them by candidate, and uses a local LLM to generate answers grounded in the retrieved evidence.
 
 The project is intended as a portfolio project to demonstrate practical skills in:
 - LLM application development
 - Retrieval-Augmented Generation (RAG)
-- vector similarity search with FAISS
+- Vector similarity search with FAISS
 - FastAPI backend development
 - Docker-based local deployment
-- grounded answer verification
+- Grounded answer verification
 
 ## Features
 - Fully local RAG pipeline (no cloud APIs required)
@@ -24,11 +24,12 @@ The project is intended as a portfolio project to demonstrate practical skills i
 - Groundedness verification of generated answers
 - Interactive debug UI for inspecting retrieval behavior
 - Dockerized deployment
+- Candidate-aware context construction that groups retrieved chunks by resume
 
 ## Architecture
-![Project Architecture](RAG.png)
+![RAG  Architecture](RAG.png)
 
-## Technology Used
+## Technologies Used
 1. Programming Language - Python  
 2. API Framework - FastAPI  
 3. LLM Runtime - Ollama  
@@ -37,8 +38,22 @@ The project is intended as a portfolio project to demonstrate practical skills i
 6. Vector Store - FAISS  
 7. PDF Loading - PyPDF  
 8. Containerization & Environment Management - Docker & Docker Compose  
-9. Frontend - HTML, CSS, JavaScript  
+9. Frontend - HTML, CSS, JavaScript
 
+## Quick Start
+```bash
+git clone <repo>
+cd <repo>
+
+docker compose up --build
+
+docker exec -it ollama ollama pull llama3.1
+docker exec -it ollama ollama pull nomic-embed-text
+
+docker compose exec rag_api python ingest.py
+
+Then open: http://localhost:8000
+```
 ## How It Works
 1. **Ingestion**  
    PDF CVs are loaded from the local `data/docs` folder and split into smaller text chunks.
@@ -52,11 +67,28 @@ The project is intended as a portfolio project to demonstrate practical skills i
 4. **Retrieval**  
    When a user asks a question, the system retrieves the most relevant chunks from the FAISS index.
 
-5. **Generation**  
-   A local LLM uses the retrieved context to generate an answer based only on the indexed CV content.
+5. **Candidate Grouping**  
+   Retrieved chunks are grouped by `candidate_id` so the system reasons over candidate-level evidence rather than isolated chunk fragments.
 
-6. **Verification**  
-   The generated answer is checked using a lightweight heuristic grounding verifier that ensures generated sentences reference retrieved chunks and contain overlapping keywords with the cited text.
+6. **Candidate Summarization**  
+   Retrieved evidence for each candidate is summarized into concise bullet points grounded in the original chunks.
+
+7. **Generation**  
+   The LLM answers the user’s question using the candidate summaries while preserving chunk-level citations.
+
+8. **Verification**  
+   The generated answer is checked using a heuristic grounding verifier to ensure cited sentences are supported by the retrieved chunks.
+
+## Example Workflow
+1. Place CV PDFs in `data/docs/`
+2. Start the services with Docker
+3. Pull the required Ollama models
+4. Run ingestion to create the FAISS index
+5. Open the local UI
+6. Ask questions such as:
+   - Which candidates mention Python?
+   - Who has data engineering experience?
+   - Does any candidate have a Master's degree?
 
 ## Project Structure
 ```text
@@ -85,24 +117,24 @@ The system does not rely on a public dataset by default. Instead, it indexes CV 
 
 2. Start the services.
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 3. Pull the required Ollama models if needed:
 ```bash
-ollama pull llama3.1
-ollama pull nomic-embed-text
+docker exec -it ollama ollama pull llama3.1
+docker exec -it ollama ollama pull nomic-embed-text
 ```
 
 4. Place PDF CVs inside:
-data/docs/
+`data/docs/`
 
-5. Run ingestion to build the vector index:
+5. Run ingestion to build the FAISS vector index (inside the API container):
 ```bash
-python ingest.py
+docker compose exec rag_api python ingest.py
 ```
 6. Open the interface in the browser:
-http://localhost:8000
+`http://localhost:8000`
 
 ## API Endpoints
 GET /: Serves the local debug interface.
@@ -141,6 +173,12 @@ This project is designed to work with local CV documents.
 
 Do **not** commit real CVs or generated vector indexes to GitHub.  
 The `data/docs` and `data/index` folders are intended for local use only and should be excluded using `.gitignore`.
+
+## Current Limitations
+- Retrieval is limited to the indexed PDF content and may miss information if the relevant text is not retrieved in the top-k results.
+- Grounding verification is heuristic-based and does not perform full semantic entailment.
+- The interface is intended for debugging and inspection rather than production use.
+- The system currently works best on small local CV collections.
 
 ## Future Improvements
 - migrate frontend to React
